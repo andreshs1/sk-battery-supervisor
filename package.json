@@ -1,0 +1,41 @@
+{
+  "name": "sk-battery-supervisor",
+  "version": "0.2.0",
+  "description": "SignalK Battery Supervisor for configurable charge profiles, SOC targets, JK BMS integration, and future Cerbo GX relay control",
+  "main": "plugin/index.js",
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-webapp",
+    "signalk-category-electrical",
+    "battery",
+    "charging",
+    "lifepo4",
+    "victron",
+    "cerbo",
+    "jk-bms",
+    "mqtt",
+    "marine"
+  ],
+  "signalk-plugin-enabled-by-default": false,
+  "signalk": {
+    "displayName": "Battery Supervisor",
+    "appIcon": "./icon.png"
+  },
+  "files": [
+    "plugin",
+    "public",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andreshs1/sk-battery-supervisor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/andreshs1/sk-battery-supervisor/issues"
+  },
+  "homepage": "https://github.com/andreshs1/sk-battery-supervisor#readme",
+  "author": "andreshs1",
+  "license": "MIT"
+}

@@ -124,7 +124,7 @@
 
 <body>
   <h1>Battery Supervisor</h1>
-  <div class="subtitle">Charge profile selector and SOC-based charge permission</div>
+  <div class="subtitle">Profile-based battery charging management</div>
 
   <div class="card">
     <h2>Status</h2>
@@ -180,16 +180,16 @@
       document.getElementById('status').innerHTML = `
         <div class="status-grid">
           <div class="key">Active profile</div>
-          <div class="value">${status.profileLabel} (${status.activeProfile})</div>
+          <div class="value">${status.profileLabel}</div>
 
           <div class="key">Current SOC</div>
           <div class="value">${formatSoc(status.currentSoc)}</div>
 
-          <div class="key">Target SOC</div>
-          <div class="value">${status.targetSoc}%</div>
+          <div class="key">Start charging at</div>
+          <div class="value">${status.minSoc}%</div>
 
-          <div class="key">Resume SOC</div>
-          <div class="value">${status.resumeSoc}%</div>
+          <div class="key">Stop charging at</div>
+          <div class="value">${status.maxSoc}%</div>
 
           <div class="key">Charge state</div>
           <div class="value ${chargeClass}">${chargeText}</div>
@@ -222,7 +222,7 @@
             <div>
               <div class="label">${profile.label}</div>
               <div class="details">
-                id: ${profile.id} · target: ${profile.targetSoc}% · hysteresis: ${profile.hysteresis}%
+                ${profile.minSoc}% → ${profile.maxSoc}%
               </div>
             </div>
           </div>

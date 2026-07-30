@@ -1,136 +1,178 @@
-# Battery Supervisor
+# Battery Supervisor for SignalK
 
-Battery Supervisor is a SignalK plugin and WebApp that provides configurable battery charging profiles and charging control logic for marine electrical systems.
+Battery Supervisor is a SignalK plugin that provides profile-based battery charging supervision using configurable State of Charge (SOC) thresholds.
 
-The plugin allows users to select configurable charge profiles such as Storage, Harbor, Daily, Cruise, and Full, each with its own target SOC and hysteresis settings. It continuously monitors battery state of charge and determines whether charging should be enabled or blocked based on the active profile.
+The plugin evaluates battery SOC against user-defined charge profiles and publishes the resulting charging state to SignalK paths for use by external automation systems.
 
-Battery Supervisor is designed to integrate with SignalK, MQTT, Home Assistant, Grafana, Node-RED, and marine charging systems while keeping charging policy decisions centralized within SignalK.
+Battery Supervisor is intentionally **hardware-agnostic**. It does not directly control chargers, relays, MPPTs, inverters, or battery management systems. Instead, it acts as a supervisory decision engine that publishes battery management information which can then be consumed by other systems.
 
-## Features
+---
 
-- SignalK server plugin
-- SignalK WebApp
+# Features
+
 - Configurable battery SOC input path
-- Configurable charging profiles
-- User-selectable charge profiles
-- Target SOC and hysteresis management
-- Charge enable / disable logic
-- MQTT-friendly architecture
-- Home Assistant integration
-- REST API for profile management
+- Multiple user-defined charge profiles
+- Automatic profile identifier generation
+- Profile selection persistence across restarts
+- Profile switching through:
+  - Battery Supervisor web UI
+  - REST API
+  - SignalK command path
+- Hysteresis-based charge enable logic
+- Published SignalK charge-control paths
+- Human-readable state and reason reporting
+- Hardware-independent architecture
 
-## Default Profiles
+---
 
-| Profile | Target SOC |
-|----------|-----------|
-| Storage | 60% |
-| Harbor | 70% |
-| Daily | 80% |
-| Cruise | 90% |
-| Full | 100% |
+# Supported Charge Profiles
 
-Profiles can be modified, removed, or new profiles can be created through the plugin configuration.
+| Profile | Start Charging Below | Stop Charging At |
+|----------|----------|----------|
+| Storage | 50% | 60% |
+| Harbour | 60% | 70% |
+| Daily | 70% | 80% |
+| Cruise Prep | 80% | 90% |
+| Full Charge | 95% | 100% |
 
-## Main SignalK Outputs
+Users can freely add, edit, remove, or reorder profiles.
 
-Default output path:
+Profile identifiers are automatically generated from the display label.
 
-```text
-electrical.batteries.277.chargeControl
-```
+| Display Label | Generated ID |
+|---------------|-------------|
+| Storage | storage |
+| Harbour | harbour |
+| Daily | daily |
+| Cruise Prep | cruise-prep |
+| Full Charge | full-charge |
 
-Primary outputs:
+---
 
-```text
-profile
-profileLabel
-targetSoc
-resumeSoc
-soc
-chargeEnable
-state
-reason
-lastUpdate
-```
+# How Battery Supervisor Works
 
-The most important output is:
+Battery Supervisor continuously monitors a configured battery SOC value and compares it against the currently selected charge profile.
 
-```text
-electrical.batteries.277.chargeControl.chargeEnable
-```
+Each profile contains:
 
-which can be consumed by MQTT, Home Assistant, Node-RED, dashboards, or future charger-control integrations.
+- Minimum SOC threshold
+- Maximum SOC threshold
 
-## REST API
+Charging is controlled using hysteresis logic.
 
-Get current status:
+---
 
-```http
-GET /plugins/sk-battery-supervisor/status
-```
+# Design Philosophy
 
-Get available profiles:
+Battery Supervisor is intended to be a reusable battery supervision layer.
 
-```http
-GET /plugins/sk-battery-supervisor/profiles
-```
+It publishes charging decisions into SignalK but leaves actual hardware control to external systems.
 
-Change active profile:
+Examples include:
 
-```http
-PUT /plugins/sk-battery-supervisor/profile
-```
+- Victron Cerbo GX
+- Home Assistant
+- Node-RED
+- MQTT consumers
+- SignalK plugins
+- Custom automation scripts
+- Future JK BMS integrations
 
-Example:
+---
 
-```json
-{
-  "profile": "daily"
-}
-```
+# Published SignalK Paths
 
-PowerShell example:
-
-```powershell
-Invoke-RestMethod `
-  -Method Put `
-  -Uri http://localhost:3000/plugins/sk-battery-supervisor/profile `
-  -ContentType "application/json" `
-  -Body '{"profile":"daily"}'
-```
-
-## Home Assistant Integration
-
-Battery Supervisor is designed to work with existing SignalK MQTT bridges.
-
-Typical flow:
+Default output base path:
 
 ```text
-Home Assistant
-      ↓
-     MQTT
-      ↓
- SignalK
-      ↓
+electrical.batteries.house.chargeControl
+```
+
+Published values:
+
+| Path | Description |
+|--------|--------|
+| profile | Active profile identifier |
+| profileLabel | Active profile display name |
+| availableProfiles | Available profile identifiers |
+| availableProfileLabels | Available profiles with thresholds |
+| minSoc | Active profile minimum SOC |
+| maxSoc | Active profile maximum SOC |
+| soc | Current battery SOC |
+| chargeEnable | Charging permission state |
+| state | charging_allowed or charging_blocked |
+| reason | Human-readable explanation |
+| lastProfileChangeSource | Origin of last profile change |
+| lastUpdate | Timestamp of last update |
+
+---
+
+# Example: Victron Cerbo GX Integration
+
+```text
+JK BMS
+   │
+   ▼
+SignalK
+   │
+   ▼
 Battery Supervisor
-      ↓
- SignalK Paths
-      ↓
- MQTT / Dashboards / Automation
+   │
+   ├── chargeEnable
+   ├── profile
+   ├── profileLabel
+   │
+   ▼
+Node-RED / MQTT / Home Assistant
+   │
+   ▼
+Cerbo GX
 ```
 
-## Roadmap
+Battery Supervisor determines whether charging should be allowed. External systems consume the published SignalK values and apply the required hardware actions, including DVCC limits, charger control, relay control, MPPT control, and inverter control.
 
-Planned future capabilities include:
+---
 
-- Dynamic charging-current control
-- Battery-condition-aware charging
-- Relay-based charger control
-- Charging source coordination
-- Victron Cerbo GX integration
-- Advanced automation logic
-- Historical charging analytics
+# Profile Selection
 
-## License
+Profiles may be selected using:
 
-MIT License
+- Battery Supervisor Web UI
+- REST API
+- SignalK command path
+
+Default command path:
+
+```text
+electrical.batteries.house.chargeControl.command.profile
+```
+
+Examples:
+
+```text
+storage
+harbour
+daily
+cruise-prep
+full-charge
+```
+
+---
+
+# Future Roadmap
+
+- JK BMS RS485 integration
+- Cell voltage monitoring
+- Dynamic charge current limiting
+- Dynamic discharge current limiting
+- Cell balancing awareness
+- Victron DVCC integration
+- Relay control outputs
+- MPPT supervisory control
+- Advanced battery protection logic
+
+---
+
+# License
+
+MIT License.

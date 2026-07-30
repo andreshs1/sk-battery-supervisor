@@ -1,7 +1,7 @@
 {
   "name": "sk-battery-supervisor",
-  "version": "0.2.0",
-  "description": "SignalK Battery Supervisor for configurable charge profiles, SOC targets, JK BMS integration, and future Cerbo GX relay control",
+  "version": "0.3.0",
+  "description": "SignalK Battery Supervisor for configurable charge profiles, SOC range-based charging logic, and publication of charge-control state to SignalK paths for use by external automation and charging-control systems.",
   "main": "plugin/index.js",
   "keywords": [
     "signalk-node-server-plugin",

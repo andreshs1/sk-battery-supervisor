@@ -5,9 +5,9 @@
  *
  * Current function:
  *   - Reads configurable SOC input path
- *   - Supports configurable charge profiles
+ *   - Supports configurable charge profiles with minimum and maximum SOC thresholds
  *   - Allows active profile selection
- *   - Publishes chargeEnable based on SOC target and hysteresis
+ *   - Publishes chargeEnable based on configurable SOC ranges
  *   - Exposes REST API for Home Assistant / dashboards
  *   - Supports SignalK command path for external profile selection
  *
@@ -24,8 +24,7 @@ module.exports = function (app) {
   plugin.id = 'sk-battery-supervisor'
   plugin.name = 'Battery Supervisor'
   plugin.description =
-    'Battery supervisor for configurable charge profiles and future JK BMS / Cerbo GX relay control.'
-
+    'Battery supervisor for configurable charge profiles, SOC range-based charging logic, and publication of charge-control state to SignalK paths for use by external automation and charging-control systems.'
   let unsubscribes = []
   let timer = null
   let options = {}
@@ -38,36 +37,39 @@ module.exports = function (app) {
 
   const DEFAULT_PROFILES = [
     {
-      id: 'storage',
       label: 'Storage',
-      targetSoc: 60,
-      hysteresis: 5
+      minSoc: 50,
+      maxSoc: 60
     },
     {
-      id: 'harbor',
-      label: 'Harbor',
-      targetSoc: 70,
-      hysteresis: 5
+      label: 'Harbour',
+      minSoc: 60,
+      maxSoc: 70
     },
     {
-      id: 'daily',
       label: 'Daily',
-      targetSoc: 80,
-      hysteresis: 5
+      minSoc: 70,
+      maxSoc: 80
     },
     {
-      id: 'cruise',
       label: 'Cruise Prep',
-      targetSoc: 90,
-      hysteresis: 5
+      minSoc: 80,
+      maxSoc: 90
     },
     {
-      id: 'full',
-      label: 'Full',
-      targetSoc: 100,
-      hysteresis: 3
+      label: 'Full Charge',
+      minSoc: 95,
+      maxSoc: 100
     }
   ]
+
+  function makeProfileId(label) {
+    return String(label || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
 
   function safeNumber(value, fallback) {
     const n = Number(value)
@@ -95,7 +97,9 @@ module.exports = function (app) {
     const result = []
 
     source.forEach((profile) => {
-      const id = cleanProfileId(profile.id)
+      const id = cleanProfileId(
+        profile.id || makeProfileId(profile.label)
+      )
 
       if (!id || seen.has(id)) {
         return
@@ -106,8 +110,8 @@ module.exports = function (app) {
       result.push({
         id,
         label: String(profile.label || id),
-        targetSoc: clamp(safeNumber(profile.targetSoc, 80), 0, 100),
-        hysteresis: clamp(safeNumber(profile.hysteresis, 5), 0, 50)
+        minSoc: clamp(safeNumber(profile.minSoc, 70), 0, 100),
+        maxSoc: clamp(safeNumber(profile.maxSoc, 80), 0, 100)
       })
     })
 
@@ -134,24 +138,10 @@ module.exports = function (app) {
 
     if (activeProfileId) {
       const selected = getProfileById(activeProfileId)
+
       if (selected) {
         return selected
       }
-    }
-
-    const configuredSelected =
-      cleanProfileId(options.selectedProfile) ||
-      cleanProfileId(options.defaultProfile)
-
-    const configuredProfile = getProfileById(configuredSelected)
-
-    if (configuredProfile) {
-      return configuredProfile
-    }
-
-    const daily = getProfileById('daily')
-    if (daily) {
-      return daily
     }
 
     return profiles[0]
@@ -196,7 +186,10 @@ module.exports = function (app) {
   }
 
   function getBasePath() {
-    return options.outputBasePath || 'electrical.batteries.277.chargeControl'
+    return ( 
+      options.outputBasePath ||
+      'electrical.batteries.house.chargeControl'
+    )
   }
 
   function emitAll(profile, decision) {
@@ -211,13 +204,12 @@ module.exports = function (app) {
       profiles.map((p) => ({
         id: p.id,
         label: p.label,
-        targetSoc: p.targetSoc,
-        hysteresis: p.hysteresis
+        minSoc: p.minSoc,
+        maxSoc: p.maxSoc
       }))
     )
-    emitPath(`${basePath}.targetSoc`, profile.targetSoc)
-    emitPath(`${basePath}.resumeSoc`, decision.resumeSoc)
-    emitPath(`${basePath}.hysteresis`, profile.hysteresis)
+    emitPath(`${basePath}.minSoc`, profile.minSoc)
+    emitPath(`${basePath}.maxSoc`, profile.maxSoc)
     emitPath(`${basePath}.soc`, currentSocPct)
     emitPath(`${basePath}.chargeEnable`, decision.chargeEnable)
     emitPath(
@@ -232,60 +224,73 @@ module.exports = function (app) {
   function calculateDecision() {
     const profile = getActiveProfile()
 
-    const targetSoc = clamp(safeNumber(profile.targetSoc, 80), 0, 100)
-    const hysteresis = clamp(safeNumber(profile.hysteresis, 5), 0, 50)
-    const resumeSoc = clamp(targetSoc - hysteresis, 0, 100)
+    const minSoc = profile.minSoc
+    const maxSoc = profile.maxSoc
 
     if (currentSocPct === null) {
       return {
         profile,
         decision: {
           chargeEnable: false,
-          resumeSoc,
+          minSoc,
+          maxSoc,
           reason: 'No valid SOC available'
         }
       }
     }
 
     /*
-     * Latching hysteresis.
-     *
-     * If charging is allowed:
-     *   allow until SOC >= target
-     *
-     * If charging is blocked:
-     *   block until SOC <= resume SOC
-     */
-
+    * Latching min/max SOC logic.
+    *
+    * If charging is allowed:
+    *   allow until SOC >= maxSoc
+    *
+    * If charging is blocked:
+    *   block until SOC <= minSoc
+    */
     let nextChargeEnable = chargeEnable
 
     if (nextChargeEnable === null) {
-      nextChargeEnable = currentSocPct < targetSoc
-    } else if (nextChargeEnable === true && currentSocPct >= targetSoc) {
+      nextChargeEnable = currentSocPct < maxSoc
+    }
+    else if (
+      nextChargeEnable === true &&
+      currentSocPct >= maxSoc
+    ) {
       nextChargeEnable = false
-    } else if (nextChargeEnable === false && currentSocPct <= resumeSoc) {
+    }
+    else if (
+      nextChargeEnable === false &&
+      currentSocPct <= minSoc
+    ) {
       nextChargeEnable = true
     }
-
+    
     let reason
 
     if (nextChargeEnable) {
-      reason = `SOC ${currentSocPct.toFixed(
-        1
-      )}% is below target ${targetSoc}%`
-    } else if (currentSocPct >= targetSoc) {
-      reason = `SOC target reached: ${currentSocPct.toFixed(
-        1
-      )}% >= ${targetSoc}%`
-    } else {
-      reason = `Charging held off by hysteresis until SOC <= ${resumeSoc}%`
+      reason =
+        `Charging enabled. SOC ${currentSocPct.toFixed(
+          1
+        )}% is below stop threshold ${maxSoc}%`
+    }
+    else if (currentSocPct >= maxSoc) {
+      reason =
+        `Charging stopped. SOC ${currentSocPct.toFixed(
+          1
+        )}% reached ${maxSoc}%`
+    }
+    else {
+      reason =
+        `Waiting until SOC falls below ${minSoc}%`
     }
 
     return {
       profile,
       decision: {
         chargeEnable: nextChargeEnable,
-        resumeSoc,
+        minSoc,
+        maxSoc,
         reason
       }
     }
@@ -295,7 +300,6 @@ module.exports = function (app) {
     const result = calculateDecision()
     const profile = result.profile
     const decision = result.decision
-
     activeProfileId = profile.id
     chargeEnable = decision.chargeEnable
     lastReason = decision.reason
@@ -305,7 +309,7 @@ module.exports = function (app) {
     app.setPluginStatus(
       `${profile.label}: SOC ${
         currentSocPct === null ? 'unknown' : currentSocPct.toFixed(1) + '%'
-      }, target ${profile.targetSoc}%, chargeEnable=${chargeEnable}`
+      }, range ${profile.minSoc}% - ${profile.maxSoc}%, chargeEnable=${chargeEnable}`
     )
   }
 
@@ -315,7 +319,8 @@ module.exports = function (app) {
     }
 
     const savedOptions = Object.assign({}, options, {
-      selectedProfile: activeProfileId
+      selectedProfileId: activeProfileId,
+      selectedProfileLabel: getActiveProfile().label
     })
 
     app.savePluginOptions(savedOptions, (err) => {
@@ -338,7 +343,8 @@ module.exports = function (app) {
     }
 
     activeProfileId = profile.id
-    options.selectedProfile = profile.id
+    options.selectedProfileId = profile.id
+    options.selectedProfileLabel = profile.label
     lastProfileChangeSource = source || 'unknown'
 
     /*
@@ -410,25 +416,25 @@ module.exports = function (app) {
         /*
          * This is configurable in the plugin settings.
          * Your system currently uses:
-         * electrical.batteries.277.capacity.stateOfCharge
+         * 
          */
-        socPath: 'electrical.batteries.277.capacity.stateOfCharge',
+        socPath: '',
 
         /*
          * Outputs from this plugin.
          */
-        outputBasePath: 'electrical.batteries.277.chargeControl',
+        outputBasePath: 'electrical.batteries.house.chargeControl',
 
         /*
-         * Optional input path.
-         * Home Assistant or another system may write a profile id here:
-         * storage / harbor / daily / cruise / full / custom profile id
-         */
+        * Optional input path.
+        * External systems may write the generated profile identifier
+        * (for example: storage, harbour, daily, cruise-prep, full-charge).
+        */
+       selectedProfileId: null,
+       selectedProfileLabel: null,
         profileCommandPath:
-          'electrical.batteries.277.chargeControl.command.profile',
+          'electrical.batteries.house.chargeControl.command.profile',
 
-        defaultProfile: 'daily',
-        selectedProfile: 'daily',
         publishIntervalSeconds: 30,
         profiles: DEFAULT_PROFILES
       },
@@ -437,13 +443,19 @@ module.exports = function (app) {
 
     options.profiles = normalizeProfiles(options.profiles)
 
-    activeProfileId =
-      cleanProfileId(options.selectedProfile) ||
-      cleanProfileId(options.defaultProfile) ||
-      'daily'
+    if (!options.socPath || !options.socPath.trim()) {
+      app.setPluginError(
+        'Battery SOC input path must be configured'
+      )
+      return
+    }
+
+    const profiles = getProfiles()
+
+    activeProfileId = cleanProfileId(options.selectedProfileId)
 
     if (!getProfileById(activeProfileId)) {
-      activeProfileId = getActiveProfile().id
+      activeProfileId = profiles.length ? profiles[0].id : null
     }
 
     chargeEnable = null
@@ -534,9 +546,8 @@ module.exports = function (app) {
         plugin: plugin.id,
         activeProfile: profile.id,
         profileLabel: profile.label,
-        targetSoc: profile.targetSoc,
-        hysteresis: profile.hysteresis,
-        resumeSoc: clamp(profile.targetSoc - profile.hysteresis, 0, 100),
+        minSoc: profile.minSoc,
+        maxSoc: profile.maxSoc,
         currentSoc: currentSocPct,
         chargeEnable,
         reason: lastReason,
@@ -594,45 +605,36 @@ module.exports = function (app) {
       required: [
         'socPath',
         'outputBasePath',
-        'profileCommandPath',
-        'defaultProfile',
-        'selectedProfile'
+        'profileCommandPath'
       ],
       properties: {
         socPath: {
           type: 'string',
           title: 'Battery SOC input path',
-          default: 'electrical.batteries.277.capacity.stateOfCharge',
+          default: '',
           description:
             'SignalK path for battery state of charge. Accepts either 0.0-1.0 or 0-100.'
         },
         outputBasePath: {
           type: 'string',
           title: 'Output base path',
-          default: 'electrical.batteries.277.chargeControl',
+          default: 'electrical.batteries.house.chargeControl',
           description:
             'Base SignalK path where Battery Supervisor output values will be published.'
         },
         profileCommandPath: {
           type: 'string',
           title: 'Profile command input path',
-          default: 'electrical.batteries.277.chargeControl.command.profile',
+          default: 'electrical.batteries.house.chargeControl.command.profile',
           description:
             'Optional SignalK path where an external system such as Home Assistant can write the requested profile id.'
         },
-        defaultProfile: {
+        selectedProfileLabel: {
           type: 'string',
-          title: 'Default profile id',
-          default: 'daily',
+          title: 'Selected profile',
+          readOnly: true,
           description:
-            'Profile id used as fallback on startup if selected profile is invalid.'
-        },
-        selectedProfile: {
-          type: 'string',
-          title: 'Selected profile id',
-          default: 'daily',
-          description:
-            'Currently selected profile id. This can also be changed from the Battery Supervisor web page or REST API.'
+            'Currently selected charge profile. Updated automatically when a profile is selected from the Battery Supervisor web page, REST API, or SignalK command path.'
         },
         publishIntervalSeconds: {
           type: 'number',
@@ -645,32 +647,26 @@ module.exports = function (app) {
           type: 'array',
           title: 'Charge profiles',
           description:
-            'Add, remove, or edit charge profiles. The id is the value used by REST, Home Assistant, and the selector page.',
+            'Add, remove, or edit charge profiles. Profile identifiers are generated automatically from the display label.',
           items: {
             type: 'object',
-            required: ['id', 'label', 'targetSoc', 'hysteresis'],
+            required: ['label', 'minSoc', 'maxSoc'],
             properties: {
-              id: {
-                type: 'string',
-                title: 'Profile id',
-                description:
-                  'Short id, lowercase recommended, for example: storage, daily, cruise, full.'
-              },
               label: {
                 type: 'string',
                 title: 'Display label'
               },
-              targetSoc: {
+              minSoc: {
                 type: 'number',
-                title: 'Target SOC percent',
+                title: 'Start charging below (%)',
                 minimum: 0,
                 maximum: 100
               },
-              hysteresis: {
+              maxSoc: {
                 type: 'number',
-                title: 'Hysteresis percent',
+                title: 'Stop charging at (%)',
                 minimum: 0,
-                maximum: 50
+                maximum: 100
               }
             }
           },

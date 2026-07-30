@@ -133,6 +133,159 @@ Battery Supervisor determines whether charging should be allowed. External syste
 
 ---
 
+# Configuration
+# Configuration
+
+Battery Supervisor must be configured with a valid battery State of Charge (SOC) source before it can operate.
+
+## Battery SOC Input Path
+
+Select the SignalK path that contains the battery SOC value.
+
+Example:
+
+```text
+electrical.batteries.house.capacity.stateOfCharge
+```
+
+Battery Supervisor accepts either:
+
+```text
+0.0 - 1.0
+```
+
+or:
+
+```text
+0 - 100
+```
+
+SOC formats and automatically normalises them to a percentage value.
+
+---
+
+## Output Base Path
+
+Default:
+
+```text
+electrical.batteries.house.chargeControl
+```
+
+Battery Supervisor publishes all output values beneath this path.
+
+Examples:
+
+```text
+electrical.batteries.house.chargeControl.profile
+electrical.batteries.house.chargeControl.profileLabel
+electrical.batteries.house.chargeControl.chargeEnable
+electrical.batteries.house.chargeControl.reason
+```
+
+---
+
+## Profile Command Input Path
+
+Default:
+
+```text
+electrical.batteries.house.chargeControl.command.profile
+```
+
+External systems can write a profile ID to this path to change the active charge profile.
+
+Examples:
+
+```text
+storage
+harbour
+daily
+cruise-prep
+full-charge
+```
+
+This allows profile changes from:
+
+- Home Assistant
+- Node-RED
+- MQTT automation
+- Custom SignalK applications
+
+---
+
+## Republish Interval
+
+Default:
+
+```text
+30 seconds
+```
+
+Battery Supervisor republishes its current state at the configured interval, even when no SOC changes occur.
+
+This ensures external systems remain synchronised with the current battery-management state.
+
+---
+
+## Charge Profiles
+
+Profiles define the SOC operating window used by Battery Supervisor.
+
+Each profile contains:
+
+```text
+Profile Name
+Start Charging Below (%)
+Stop Charging At (%)
+```
+
+Example:
+
+| Profile | Start Charging Below | Stop Charging At |
+|----------|----------|----------|
+| Daily | 70% | 80% |
+| Cruise Prep | 80% | 90% |
+
+Users may freely:
+
+- Add profiles
+- Remove profiles
+- Rename profiles
+- Reorder profiles
+
+Profile identifiers are generated automatically from the display label.
+
+Examples:
+
+| Display Label | Generated ID |
+|---------------|-------------|
+| Storage | storage |
+| Harbour | harbour |
+| Daily | daily |
+| Cruise Prep | cruise-prep |
+| Full Charge | full-charge |
+
+---
+
+## Example Configuration
+
+| Setting | Example |
+|----------|----------|
+| Battery SOC Input Path | `electrical.batteries.house.capacity.stateOfCharge` |
+| Output Base Path | `electrical.batteries.house.chargeControl` |
+| Profile Command Input Path | `electrical.batteries.house.chargeControl.command.profile` |
+| Republish Interval | `30` |
+| Active Profile | `Daily` |
+
+---
+
+### SignalK Plugin Configuration
+
+docs/screenshots/signalk-configuration.png
+
+---
+
 # Profile Selection
 
 Profiles may be selected using:
@@ -156,6 +309,9 @@ daily
 cruise-prep
 full-charge
 ```
+### Battery Supervisor Web Interface
+
+docs/screenshots/battery-supervisor-ui.png
 
 ---
 
@@ -220,6 +376,28 @@ full-charge
 - SOC hysteresis charge control
 - REST API support
 - SignalK command path support
+
+---
+## Proven Cerbo GX Integration
+
+Battery Supervisor has been successfully validated with a Victron Cerbo GX using Node-RED.
+
+Example flow:
+
+Battery Supervisor
+→ chargeEnable
+→ MQTT
+→ Node-RED
+→ Cerbo GX Relay 2
+
+When charging is permitted, Relay 2 is closed.
+When charging is blocked, Relay 2 is opened.
+
+This demonstrates the intended architecture where Battery Supervisor acts as a supervisory decision engine while external systems remain responsible for hardware control.
+
+### Cerbo GX Relay Integration (Node-RED)
+
+docs/screenshots/node-red-relay-flow.png
 
 ---
 

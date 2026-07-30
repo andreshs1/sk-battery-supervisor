@@ -134,7 +134,6 @@ Battery Supervisor determines whether charging should be allowed. External syste
 ---
 
 # Configuration
-# Configuration
 
 Battery Supervisor must be configured with a valid battery State of Charge (SOC) source before it can operate.
 
@@ -366,6 +365,26 @@ This demonstrates the intended architecture where Battery Supervisor acts as a s
 ---
 
 # Changelog
+
+## v0.3.4
+
+### Quality Improvements
+
+- Included automated test suite in published npm package.
+- Improved SignalK Plugin Registry compatibility.
+- Added package-level test distribution for plugin validation.
+
+### Documentation
+
+- Added README screenshots.
+- Improved documentation rendering.
+- Added Node-RED and Cerbo GX integration screenshots.
+- Improved configuration documentation.
+
+### No Functional Changes
+
+This release contains packaging, testing, and documentation improvements only.
+
 ## v0.3.3
 
 ### Documentation

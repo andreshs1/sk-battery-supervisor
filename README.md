@@ -282,7 +282,7 @@ Examples:
 
 ### SignalK Plugin Configuration
 
-docs/screenshots/signalk-configuration.png
+![SignalK Configuration](docs/screenshots/signalk-configuration.png)
 
 ---
 
@@ -310,8 +310,30 @@ cruise-prep
 full-charge
 ```
 ### Battery Supervisor Web Interface
+![SignalK Web Interface](docs/screenshots/battery-supervisor-ui.png)
 
-docs/screenshots/battery-supervisor-ui.png
+---
+
+## Proven Cerbo GX Integration
+
+Battery Supervisor has been successfully validated with a Victron Cerbo GX using Node-RED.
+
+Example flow:
+
+Battery Supervisor
+→ chargeEnable
+→ MQTT
+→ Node-RED
+→ Cerbo GX Relay 2
+
+When charging is permitted, Relay 2 is closed.
+When charging is blocked, Relay 2 is opened.
+
+This demonstrates the intended architecture where Battery Supervisor acts as a supervisory decision engine while external systems remain responsible for hardware control.
+
+### Cerbo GX Relay Integration (Node-RED)
+![SignalK Node-red Relay flow](docs/screenshots/node-red-relay-flow.png)
+
 
 ---
 
@@ -344,6 +366,38 @@ docs/screenshots/battery-supervisor-ui.png
 ---
 
 # Changelog
+## v0.3.3
+
+### Documentation
+
+- Corrected README screenshot references.
+- Fixed image paths to ensure screenshots render properly on GitHub and npm.
+- Improved visual documentation layout and presentation.
+
+### No Functional Changes
+
+This release contains documentation-only updates and does not modify plugin functionality.
+
+---
+
+## v0.3.2
+
+### Documentation
+
+- Added detailed configuration guide.
+- Added Battery SOC input path documentation.
+- Added Output Base Path documentation.
+- Added Profile Command Path documentation.
+- Added Republish Interval documentation.
+- Added charge profile configuration examples.
+- Added example SignalK configuration.
+- Added screenshots section to the README.
+- Expanded Cerbo GX integration documentation.
+- Improved onboarding and setup guidance for new users.
+
+### No Functional Changes
+
+This release contains documentation-only updates and does not modify plugin functionality.
 
 ## v0.3.1
 
@@ -376,28 +430,6 @@ docs/screenshots/battery-supervisor-ui.png
 - SOC hysteresis charge control
 - REST API support
 - SignalK command path support
-
----
-## Proven Cerbo GX Integration
-
-Battery Supervisor has been successfully validated with a Victron Cerbo GX using Node-RED.
-
-Example flow:
-
-Battery Supervisor
-→ chargeEnable
-→ MQTT
-→ Node-RED
-→ Cerbo GX Relay 2
-
-When charging is permitted, Relay 2 is closed.
-When charging is blocked, Relay 2 is opened.
-
-This demonstrates the intended architecture where Battery Supervisor acts as a supervisory decision engine while external systems remain responsible for hardware control.
-
-### Cerbo GX Relay Integration (Node-RED)
-
-docs/screenshots/node-red-relay-flow.png
 
 ---
 

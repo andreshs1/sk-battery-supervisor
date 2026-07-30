@@ -1,6 +1,6 @@
 {
   "name": "sk-battery-supervisor",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "SignalK Battery Supervisor for configurable charge profiles, SOC range-based charging logic, and publication of charge-control state to SignalK paths for use by external automation and charging-control systems.",
   "main": "plugin/index.js",
   "keywords": [
@@ -24,8 +24,10 @@
   "files": [
     "plugin",
     "public",
+    "test",
     "README.md",
     "LICENSE",
+    "docs",
     "package.json"
   ],
   "scripts": {

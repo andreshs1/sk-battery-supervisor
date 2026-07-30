@@ -173,6 +173,56 @@ full-charge
 
 ---
 
+# Future Roadmap
+
+- JK BMS RS485 integration
+- Cell voltage monitoring
+- Dynamic charge current limiting
+- Dynamic discharge current limiting
+- Cell balancing awareness
+- Victron DVCC integration
+- Relay control outputs
+- MPPT supervisory control
+- Advanced battery protection logic
+
+---
+
+# Changelog
+
+## v0.3.1
+
+### Added
+
+- Automated plugin test suite using Node.js built-in test runner
+- Selected profile display in SignalK configuration
+
+### Changed
+
+- Replaced hardcoded profile fallback logic with first-profile fallback
+- Added persistent profile selection across restarts
+- Separated internal profile identifiers from user-facing profile labels
+- Improved profile management and startup behavior
+- Expanded documentation and architecture guidance
+- Added Victron Cerbo GX integration example
+
+### Quality
+
+- Verified plugin loading
+- Verified schema generation
+- Verified plugin initialization
+
+## v0.2.0
+
+### Added
+
+- Initial Battery Supervisor implementation
+- Configurable charge profiles
+- SOC hysteresis charge control
+- REST API support
+- SignalK command path support
+
+---
+
 # License
 
 MIT License.
